@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件管理系统（STG环境）</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        .table th, .table td { text-align: center; vertical-align: middle; white-space: nowrap; }
+        .table th { width: auto; padding: 8px; }
+        .file-name { max-width: 250px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        .action-buttons { display: flex; gap: 5px; justify-content: center; flex-wrap: nowrap; }
+        .rename-form { display: flex; gap: 5px; align-items: center; flex-wrap: nowrap; }
+        .rename-input { width: 100px; font-size: 14px; padding: 2px; }
+        .sort-icons { cursor: pointer; margin-left: 5px; }
+        .btn-sm { padding: 4px 8px; font-size: 12px; }
+    </style>
+    <script>
+        function updatePerPage() {
+            let url = new URL(window.location.href);
+            url.searchParams.set("per_page", document.getElementById("per_page_select").value);
+            url.searchParams.set("page", 1); // 切换每页数量后，回到第一页
+            window.location.href = url.toString();
+        }
+
+        function sortTable(sort_by, reverse) {
+            let url = new URL(window.location.href);
+            url.searchParams.set("sort_by", sort_by);
+            url.searchParams.set("reverse", reverse);
+            url.searchParams.set("per_page", document.getElementById("per_page_select").value);
+            window.location.href = url.toString();
+        }
+    </script>
+</head>
+<body>
+    <div class="container my-4">
+        <h1 class="text-center mb-4">📁 文件管理系统（STG环境）</h1>
+
+        <!-- 搜索栏 & 返回全部 -->
+        <form id="filterForm" action="/" method="get" class="d-flex gap-2 mb-3">
+            <input type="text" class="form-control" name="search" placeholder="🔍  搜索文件或文件夹" value="{{ search }}">
+            <button type="submit" class="btn btn-primary">搜索</button>
+            {% if search and search.strip() != '' %}
+            <a href="/" class="btn btn-secondary">返回全部</a>
+            {% endif %}
+        </form>
+
+        <!-- 新增返回上级功能 -->
+        {% if current_path != '/data/dify_tp_files' %}
+        <a href="{{ url_for('index', current_path=current_path.rsplit('/', 1)[0]) }}" class="btn btn-secondary mb-3">返回上级</a>
+        {% endif %}
+
+        <!-- 新建文件夹 -->
+        <form action="/create_folder" method="post" class="mb-3">
+            <input type="text" name="folder_name" class="form-control" placeholder="输入文件夹名称">
+            <button type="submit" class="btn btn-success mt-2">新建文件夹</button>
+        </form>
+
+        <!-- 上传文件 -->
+        <form action="/upload" method="post" enctype="multipart/form-data" class="mb-3">
+            <input type="file" name="file" class="form-control">
+            <input type="hidden" name="current_path" value="{{ current_path }}">
+            <button type="submit" class="btn btn-success mt-2">上传文件</button>
+        </form>
+
+        <!-- 上传文件夹 -->
+        <form action="/upload_folder" method="post" enctype="multipart/form-data" class="mb-3">
+            <input type="file" name="folder" class="form-control" webkitdirectory directory multiple>
+            <input type="hidden" name="current_path" value="{{ current_path }}">
+            <button type="submit" class="btn btn-success mt-2">上传文件夹</button>
+        </form>
+
+        <!-- 文件和文件夹列表 -->
+        <table class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    {% for col in [('name', '名称'), ('size', '大小'), ('mtime', '更新时间')] %}
+                    <th>
+                        {{ col[1] }}
+                        <span class="sort-icons" onclick="sortTable('{{ col[0] }}', 'false')">⬆</span>
+                        <span class="sort-icons" onclick="sortTable('{{ col[0] }}', 'true')">⬇</span>
+                    </th>
+                    {% endfor %}
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in files_and_folders %}
+                <tr>
+                    <td class="file-name">
+                        {% if item.type == 'folder' %}
+                        <a href="{{ url_for('index', current_path=current_path + '/' + item.name) }}">{{ item.name }}</a>
+                        {% else %}
+                        {{ item.name }}
+                        {% endif %}
+                    </td>
+                    <td>{{ item.size if item.type == 'file' else '-' }}</td>
+                    <td>{{ item.mtime | datetimeformat }}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <a href="{{ url_for('serve_file', filename=item.name, current_path=current_path) }}" class="btn btn-sm btn-info">下载</a>
+                            {% if item.type == 'folder' %}
+                            <a href="{{ url_for('delete_file_or_folder', filename=item.name, current_path=current_path) }}" class="btn btn-sm btn-danger" onclick="if(confirm('确定删除吗？')) { this.href = this.href + (this.href.indexOf('?') > -1 ? '&' : '?') + 'confirmed=true'; } else { alert('OSError: [Errno 39] Directory not empty: \'{{ current_path }}/{{ item.name }}\''); return false; }">删除</a>
+                            {% else %}
+                            <a href="{{ url_for('delete_file_or_folder', filename=item.name, current_path=current_path) }}" class="btn btn-sm btn-danger">删除</a>
+                            {% endif %}
+                            <form action="{{ url_for('rename_file_or_folder', old_name=item.name) }}" method="post" class="rename-form">
+                                <input type="text" name="new_name" class="form-control rename-input" placeholder="新名称" required>
+                                <button type="submit" class="btn btn-sm btn-warning">重命名</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- 分页和每页条数选择 -->
+        <div class="d-flex justify-content-end align-items-center">
+            <nav>
+                <ul class="pagination mb-0">
+                    {% for i in range(1, total_pages + 1) %}
+                        <li class="page-item {% if i == page %}active{% endif %}">
+                            <a class="page-link" href="?page={{ i }}&per_page={{ per_page }}&sort_by={{ sort_by }}&reverse={{ reverse }}">{{ i }}</a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </nav>
+            <div class="ms-3">
+                <label for="per_page_select" class="me-1">每页显示：</label>
+                <select id="per_page_select" name="per_page" class="form-select d-inline w-auto" onchange="updatePerPage()">
+                    {% for num in [5, 10, 20, 50] %}
+                        <option value="{{ num }}" {% if num == per_page %}selected{% endif %}>{{ num }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
