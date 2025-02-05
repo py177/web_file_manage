@@ -1,4 +1,4 @@
-# File Management System (STG Environment)
+# File Management System
 
 This repository contains a file management system built using Python and Flask. It offers a web interface for uploading, downloading (folders are compressed into ZIP files before download), renaming, and deleting files and folders. Additional features include sorting, pagination, and search.
 
