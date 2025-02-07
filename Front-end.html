@@ -1,140 +1,326 @@
+
+cat <<'EOF' > templates/index.html
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文件管理系统（STG环境）</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <style>
-        .table th, .table td { text-align: center; vertical-align: middle; white-space: nowrap; }
-        .table th { width: auto; padding: 8px; }
-        .file-name { max-width: 250px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-        .action-buttons { display: flex; gap: 5px; justify-content: center; flex-wrap: nowrap; }
-        .rename-form { display: flex; gap: 5px; align-items: center; flex-wrap: nowrap; }
-        .rename-input { width: 100px; font-size: 14px; padding: 2px; }
-        .sort-icons { cursor: pointer; margin-left: 5px; }
-        .btn-sm { padding: 4px 8px; font-size: 12px; }
-    </style>
-    <script>
-        function updatePerPage() {
-            let url = new URL(window.location.href);
-            url.searchParams.set("per_page", document.getElementById("per_page_select").value);
-            url.searchParams.set("page", 1); // 切换每页数量后，回到第一页
-            window.location.href = url.toString();
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📁 文件管理系统（STG环境）</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>
+      .table th, .table td { text-align: center; vertical-align: middle; white-space: nowrap; }
+      /* 固定各列宽度 */
+      .table th.col-select, .table td.col-select { width: 50px; }
+      .table th.col-name, .table td.col-name { width: 250px; }
+      .table th.col-size, .table td.col-size { width: 100px; }
+      .table th.col-mtime, .table td.col-mtime { width: 150px; }
+      .table th.col-kg, .table td.col-kg { width: 150px; }
+      .table th.col-op, .table td.col-op { width: 200px; }
+      .file-name { max-width: 250px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .action-buttons { display: flex; gap: 5px; justify-content: center; flex-wrap: nowrap; }
+      .rename-form { display: flex; gap: 5px; align-items: center; flex-wrap: nowrap; }
+      .rename-input { width: 100px; font-size: 14px; padding: 2px; }
+      .sort-icons { cursor: pointer; margin-left: 5px; }
+      .btn-sm { padding: 4px 8px; font-size: 12px; }
+      .kg-filter { margin-left: 5px; font-size: 14px; text-decoration: none; }
+  </style>
+  <script>
+    // 定义当前目录及总pdf数量，传自后端
+    var currentPath = "{{ current_path }}";
+    var totalPdfCount = {{ total_pdf_count }};
+    var storageKey = "selected_pdfs_" + encodeURIComponent(currentPath);
 
-        function sortTable(sort_by, reverse) {
-            let url = new URL(window.location.href);
-            url.searchParams.set("sort_by", sort_by);
-            url.searchParams.set("reverse", reverse);
-            url.searchParams.set("per_page", document.getElementById("per_page_select").value);
-            window.location.href = url.toString();
+    // 从localStorage获取当前目录的选中列表
+    function loadSelection() {
+      var stored = localStorage.getItem(storageKey);
+      return stored ? JSON.parse(stored) : [];
+    }
+    // 保存选中列表到localStorage
+    function saveSelection(arr) {
+      localStorage.setItem(storageKey, JSON.stringify(arr));
+    }
+    // 更新统计信息
+    function updateCounter() {
+      var selected = loadSelection();
+      var counterElem = document.getElementById("selectionCounter");
+      if(counterElem) {
+        counterElem.innerText = "已选：" + selected.length + " / 总：" + totalPdfCount;
+      }
+    }
+    // 更新批量操作按钮状态，根据本页选中状态（与 data-inkg 结合）
+    function updateBulkButtons() {
+      let checkboxes = document.querySelectorAll("input[name='selected_files']");
+      let selectedInPage = [];
+      checkboxes.forEach(function(chk) {
+        if(chk.checked) {
+          selectedInPage.push(chk);
         }
-    </script>
+      });
+      // 获取批量操作按钮
+      let btnAdd = document.getElementById("btnBulkAdd");
+      let btnRemove = document.getElementById("btnBulkRemove");
+      if(selectedInPage.length === 0) {
+        btnAdd.disabled = false;
+        btnRemove.disabled = false;
+        return;
+      }
+      let allInKG = selectedInPage.every(chk => chk.getAttribute("data-inkg") === "1");
+      let allNotInKG = selectedInPage.every(chk => chk.getAttribute("data-inkg") === "0");
+      btnAdd.disabled = allInKG;
+      btnRemove.disabled = allNotInKG;
+    }
+    // 当复选框状态改变时，更新localStorage中对应的记录
+    function onCheckboxChange(chk) {
+      var selected = loadSelection();
+      var val = chk.value;
+      if(chk.checked) {
+        if(selected.indexOf(val) === -1) {
+          selected.push(val);
+        }
+      } else {
+        var idx = selected.indexOf(val);
+        if(idx !== -1) {
+          selected.splice(idx, 1);
+        }
+      }
+      saveSelection(selected);
+      updateBulkButtons();
+      updateCounter();
+    }
+    // 页面加载时：对本页复选框进行状态恢复
+    function restoreCheckboxes() {
+      var selected = loadSelection();
+      let checkboxes = document.querySelectorAll("input[name='selected_files']");
+      checkboxes.forEach(function(chk) {
+        if(selected.indexOf(chk.value) !== -1) {
+          chk.checked = true;
+        }
+        // 绑定 change 事件
+        chk.addEventListener("change", function() {
+          onCheckboxChange(chk);
+        });
+      });
+      updateBulkButtons();
+      updateCounter();
+    }
+    // 在提交批量操作表单前，将所有已选复选框（跨页保存的 localStorage 数据）写入隐藏输入
+    function prepareBulkSubmit(form) {
+      var selected = loadSelection();
+      var container = document.getElementById("bulkHiddenContainer");
+      container.innerHTML = "";
+      selected.forEach(function(val) {
+        var input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "selected_files";
+        input.value = val;
+        container.appendChild(input);
+      });
+      return true;
+    }
+    // 全选当前页面所有pdf
+    function selectAllPdfs() {
+      let checkboxes = document.querySelectorAll("input[name='selected_files']");
+      let selected = loadSelection();
+      checkboxes.forEach(function(chk) {
+        if(chk.value.toLowerCase().endsWith('.pdf')) {
+          chk.checked = true;
+          if(selected.indexOf(chk.value) === -1) {
+            selected.push(chk.value);
+          }
+        }
+      });
+      saveSelection(selected);
+      updateBulkButtons();
+      updateCounter();
+    }
+    // 全不选当前页面所有pdf
+    function deselectAllPdfs() {
+      let checkboxes = document.querySelectorAll("input[name='selected_files']");
+      let selected = loadSelection();
+      checkboxes.forEach(function(chk) {
+        if(chk.value.toLowerCase().endsWith('.pdf')) {
+          chk.checked = false;
+          var idx = selected.indexOf(chk.value);
+          if(idx !== -1) {
+            selected.splice(idx, 1);
+          }
+        }
+      });
+      saveSelection(selected);
+      updateBulkButtons();
+      updateCounter();
+    }
+    window.addEventListener("DOMContentLoaded", function() {
+      restoreCheckboxes();
+    });
+    // 排序功能（与后端构造链接联动，此处不做额外修改）
+    function sortTable(column, isReverse) {
+      // 此函数未做动态处理，排序链接由服务器端构造
+    }
+  </script>
 </head>
 <body>
-    <div class="container my-4">
-        <h1 class="text-center mb-4">📁 文件管理系统（STG环境）</h1>
+  <div class="container my-4">
+    {# 判断是否处于批量操作模式，通过 bulk 参数 #}
+    {% set bulk_mode = bulk %}
+    {# 已删除“显示知识图谱中的文件列表”和“检查上传的PDF”按钮 #}
+    <form id="filterForm" action="/" method="get" class="d-flex gap-2 mb-3">
+      <input type="text" class="form-control" name="search" placeholder="🔍 搜索文件或文件夹" value="{{ search }}">
+      <button type="submit" class="btn btn-primary">搜索</button>
+      {% if search and search.strip() != '' %}
+        <a href="/" class="btn btn-secondary">返回全部</a>
+      {% endif %}
+      {% if filter_kg is not none %}
+        <input type="hidden" name="filter_kg" value="{{ filter_kg }}">
+      {% endif %}
+      {% if bulk_mode %}
+        <input type="hidden" name="bulk" value="1">
+      {% endif %}
+    </form>
+    {% if current_path != '/data/' %}
+      <a href="{{ url_for('index', current_path=current_path.rsplit('/', 1)[0] or '/data/', search=search, filter_kg=filter_kg, bulk=( '1' if bulk_mode else None)) }}" class="btn btn-secondary mb-3">返回上级</a>
+    {% endif %}
+    <form action="/create_folder" method="post" class="mb-3">
+      <input type="text" name="folder_name" class="form-control" placeholder="输入文件夹名称">
+      <input type="hidden" name="current_path" value="{{ current_path }}">
+      <button type="submit" class="btn btn-success mt-2">新建文件夹</button>
+    </form>
+    <form action="/upload" method="post" enctype="multipart/form-data" class="mb-3">
+      <input type="file" name="file" class="form-control">
+      <input type="hidden" name="current_path" value="{{ current_path }}">
+      <button type="submit" class="btn btn-success mt-2">上传文件</button>
+    </form>
+    <form action="/upload_folder" method="post" enctype="multipart/form-data" class="mb-3">
+      <input type="file" name="folder" class="form-control" webkitdirectory directory multiple>
+      <input type="hidden" name="current_path" value="{{ current_path }}">
+      <button type="submit" class="btn btn-success mt-2">上传文件夹</button>
+    </form>
 
-        <!-- 搜索栏 & 返回全部 -->
-        <form id="filterForm" action="/" method="get" class="d-flex gap-2 mb-3">
-            <input type="text" class="form-control" name="search" placeholder="🔍  搜索文件或文件夹" value="{{ search }}">
-            <button type="submit" class="btn btn-primary">搜索</button>
-            {% if search and search.strip() != '' %}
-            <a href="/" class="btn btn-secondary">返回全部</a>
+    <table class="table table-bordered table-striped mt-3">
+      <thead>
+        <tr>
+          {% if bulk_mode %}
+            <th>选择</th>
+          {% endif %}
+          {% for col in [('name', '名称'), ('size', '大小'), ('mtime', '更新时间')] %}
+            <th>
+              {{ col[1] }}
+              <span class="sort-icons">
+                <a href="{{ url_for('index', current_path=current_path, search=search, filter_kg=filter_kg, sort_by=col[0], reverse='false', page=1, per_page=per_page) }}">⬆</a>
+                <a href="{{ url_for('index', current_path=current_path, search=search, filter_kg=filter_kg, sort_by=col[0], reverse='true', page=1, per_page=per_page) }}">⬇</a>
+              </span>
+            </th>
+          {% endfor %}
+          <th>
+            知识图谱
+            <a href="{{ url_for('index', current_path=current_path, filter_kg='1', search=search, bulk=( '1' if bulk_mode else None)) }}" title="筛选在图谱中" class="kg-filter">✔</a>
+            <a href="{{ url_for('index', current_path=current_path, filter_kg='0', search=search, bulk=( '1' if bulk_mode else None)) }}" title="筛选不在图谱中" class="kg-filter">✖</a>
+            <a href="{{ url_for('index', current_path=current_path, search=search) }}" title="重置筛选" class="kg-filter">重置</a>
+          </th>
+          <th>
+            操作
+            {% if bulk_mode %}
+              [<a href="{{ url_for('index', current_path=current_path, search=search, filter_kg=filter_kg) }}" class="text-decoration-none">关闭批量操作</a>]
+            {% else %}
+              [<a href="{{ url_for('index', current_path=current_path, search=search, filter_kg=filter_kg, bulk='1') }}" class="text-decoration-none">开启批量操作</a>]
             {% endif %}
-        </form>
-
-        <!-- 新增返回上级功能 -->
-        {% if current_path != '/data/dify_tp_files' %}
-        <a href="{{ url_for('index', current_path=current_path.rsplit('/', 1)[0]) }}" class="btn btn-secondary mb-3">返回上级</a>
-        {% endif %}
-
-        <!-- 新建文件夹 -->
-        <form action="/create_folder" method="post" class="mb-3">
-            <input type="text" name="folder_name" class="form-control" placeholder="输入文件夹名称">
-            <button type="submit" class="btn btn-success mt-2">新建文件夹</button>
-        </form>
-
-        <!-- 上传文件 -->
-        <form action="/upload" method="post" enctype="multipart/form-data" class="mb-3">
-            <input type="file" name="file" class="form-control">
-            <input type="hidden" name="current_path" value="{{ current_path }}">
-            <button type="submit" class="btn btn-success mt-2">上传文件</button>
-        </form>
-
-        <!-- 上传文件夹 -->
-        <form action="/upload_folder" method="post" enctype="multipart/form-data" class="mb-3">
-            <input type="file" name="folder" class="form-control" webkitdirectory directory multiple>
-            <input type="hidden" name="current_path" value="{{ current_path }}">
-            <button type="submit" class="btn btn-success mt-2">上传文件夹</button>
-        </form>
-
-        <!-- 文件和文件夹列表 -->
-        <table class="table table-bordered table-striped">
-            <thead>
-                <tr>
-                    {% for col in [('name', '名称'), ('size', '大小'), ('mtime', '更新时间')] %}
-                    <th>
-                        {{ col[1] }}
-                        <span class="sort-icons" onclick="sortTable('{{ col[0] }}', 'false')">⬆</span>
-                        <span class="sort-icons" onclick="sortTable('{{ col[0] }}', 'true')">⬇</span>
-                    </th>
-                    {% endfor %}
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in files_and_folders %}
-                <tr>
-                    <td class="file-name">
-                        {% if item.type == 'folder' %}
-                        <a href="{{ url_for('index', current_path=current_path + '/' + item.name) }}">{{ item.name }}</a>
-                        {% else %}
-                        {{ item.name }}
-                        {% endif %}
-                    </td>
-                    <td>{{ item.size if item.type == 'file' else '-' }}</td>
-                    <td>{{ item.mtime | datetimeformat }}</td>
-                    <td>
-                        <div class="action-buttons">
-                            <a href="{{ url_for('serve_file', filename=item.name, current_path=current_path) }}" class="btn btn-sm btn-info">下载</a>
-                            {% if item.type == 'folder' %}
-                            <a href="{{ url_for('delete_file_or_folder', filename=item.name, current_path=current_path) }}" class="btn btn-sm btn-danger" onclick="if(confirm('确定删除吗？')) { this.href = this.href + (this.href.indexOf('?') > -1 ? '&' : '?') + 'confirmed=true'; } else { alert('OSError: [Errno 39] Directory not empty: \'{{ current_path }}/{{ item.name }}\''); return false; }">删除</a>
-                            {% else %}
-                            <a href="{{ url_for('delete_file_or_folder', filename=item.name, current_path=current_path) }}" class="btn btn-sm btn-danger">删除</a>
-                            {% endif %}
-                            <form action="{{ url_for('rename_file_or_folder', old_name=item.name) }}" method="post" class="rename-form">
-                                <input type="text" name="new_name" class="form-control rename-input" placeholder="新名称" required>
-                                <button type="submit" class="btn btn-sm btn-warning">重命名</button>
-                            </form>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <!-- 分页和每页条数选择 -->
-        <div class="d-flex justify-content-end align-items-center">
-            <nav>
-                <ul class="pagination mb-0">
-                    {% for i in range(1, total_pages + 1) %}
-                        <li class="page-item {% if i == page %}active{% endif %}">
-                            <a class="page-link" href="?page={{ i }}&per_page={{ per_page }}&sort_by={{ sort_by }}&reverse={{ reverse }}">{{ i }}</a>
-                        </li>
-                    {% endfor %}
-                </ul>
-            </nav>
-            <div class="ms-3">
-                <label for="per_page_select" class="me-1">每页显示：</label>
-                <select id="per_page_select" name="per_page" class="form-select d-inline w-auto" onchange="updatePerPage()">
-                    {% for num in [5, 10, 20, 50] %}
-                        <option value="{{ num }}" {% if num == per_page %}selected{% endif %}>{{ num }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in files_and_folders %}
+          <tr>
+            {% if bulk_mode %}
+              <td>
+                {% if item.type == 'file' %}
+                  <input type="checkbox" name="selected_files" value="{{ item.name }}" data-inkg="{{ 1 if item.in_kg else 0 }}">
+                {% endif %}
+              </td>
+            {% endif %}
+            <td class="file-name">
+              {% if item.type == 'folder' %}
+                <a href="{{ url_for('index', current_path=current_path.rstrip('/') + '/' + item.name, search=search, filter_kg=filter_kg, bulk=( '1' if bulk_mode else None)) }}">{{ item.name }}</a>
+              {% else %}
+                {{ item.name }}
+              {% endif %}
+            </td>
+            <td>{{ item.size if item.type == 'file' else '-' }}</td>
+            <td>{{ item.mtime | datetimeformat }}</td>
+            <td>
+              {% if item.type == 'file' %}
+                {% if item.in_kg %}
+                  <span class="badge bg-success">在图谱中</span>
+                  <form action="/update_kg" method="post" style="display:inline;">
+                    <input type="hidden" name="action" value="remove">
+                    <input type="hidden" name="file_name" value="{{ item.base_name }}">
+                    <input type="hidden" name="current_path" value="{{ current_path }}">
+                    <button type="submit" class="btn btn-sm btn-warning">移出图谱</button>
+                  </form>
+                {% else %}
+                  <span class="badge bg-secondary">不在图谱中</span>
+                  <form action="/update_kg" method="post" style="display:inline;">
+                    <input type="hidden" name="action" value="add">
+                    <input type="hidden" name="file_name" value="{{ item.base_name }}">
+                    <input type="hidden" name="current_path" value="{{ current_path }}">
+                    <button type="submit" class="btn btn-sm btn-success">移入图谱</button>
+                  </form>
+                {% endif %}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td>
+              <div class="action-buttons">
+                <a href="{{ url_for('serve_file', filename=item.name, current_path=current_path) }}" class="btn btn-sm btn-info">下载</a>
+                {% if item.type == 'folder' %}
+                  <a href="{{ url_for('delete_file_or_folder', filename=item.name, current_path=current_path) }}" class="btn btn-sm btn-danger" onclick="if(confirm('确定删除该文件夹吗？')) { this.href = this.href + (this.href.indexOf('?') > -1 ? '&' : '?') + 'confirmed=true'; } else { return false; }">删除</a>
+                {% else %}
+                  <a href="{{ url_for('delete_file_or_folder', filename=item.name, current_path=current_path) }}" class="btn btn-sm btn-danger" onclick="return confirm('确定删除该文件吗？');">删除</a>
+                {% endif %}
+                <form action="{{ url_for('rename_file_or_folder', old_name=item.name) }}" method="post" class="rename-form">
+                  <input type="text" name="new_name" class="form-control rename-input" placeholder="新名称" required>
+                  <button type="submit" class="btn btn-sm btn-warning">重命名</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if bulk_mode %}
+      <form id="bulkForm" action="/bulk_action" method="post" onsubmit="return prepareBulkSubmit(this);">
+        <input type="hidden" name="current_path" value="{{ current_path }}">
+        <div id="bulkHiddenContainer"></div>
+        <div class="d-flex gap-2 mb-3">
+          <button type="submit" name="action" value="delete" class="btn btn-danger">批量删除</button>
+          <button type="submit" id="btnBulkAdd" name="action" value="add" class="btn btn-success">批量移入图谱</button>
+          <button type="submit" id="btnBulkRemove" name="action" value="remove" class="btn btn-warning">批量移出图谱</button>
+          <button type="button" class="btn btn-secondary" onclick="selectAllPdfs()">全选当前页面</button>
+          <button type="button" class="btn btn-secondary" onclick="deselectAllPdfs()">全不选当前页面</button>
+          <span id="selectionCounter" class="align-self-center ms-2"></span>
         </div>
+      </form>
+    {% endif %}
+    <div class="d-flex justify-content-end align-items-center">
+      <nav>
+        <ul class="pagination mb-0">
+          {% for i in range(1, total_pages + 1) %}
+            <li class="page-item {% if i == page %}active{% endif %}">
+              <a class="page-link" href="?page={{ i }}&per_page={{ per_page }}&sort_by={{ sort_by }}&reverse={{ reverse }}{% if filter_kg is not none and filter_kg != '' %}&filter_kg={{ filter_kg }}{% endif %}{% if bulk_mode %}&bulk=1{% endif %}">{{ i }}</a>
+            </li>
+          {% endfor %}
+        </ul>
+      </nav>
+      <div class="ms-3">
+        <label for="per_page_select" class="me-1">每页显示：</label>
+        <select id="per_page_select" name="per_page" class="form-select d-inline w-auto" onchange="updatePerPage()">
+          {% for num in [5, 10, 20, 50] %}
+            <option value="{{ num }}" {% if num == per_page %}selected{% endif %}>{{ num }}</option>
+          {% endfor %}
+        </select>
+      </div>
     </div>
+  </div>
 </body>
 </html>
+EOF
