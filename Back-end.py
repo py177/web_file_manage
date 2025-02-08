@@ -71,11 +71,11 @@ def get_files_and_folders(current_path):
 def index(current_path=FILE_DIRECTORY):
     # 获取请求参数
     try:
-        page = int(request.args.get('page', 1))
+        page = int(request.args.get('page', 1))  # 获取当前页码
     except ValueError:
         page = 1
     try:
-        per_page = int(request.args.get('per_page', DEFAULT_PER_PAGE))
+        per_page = int(request.args.get('per_page', DEFAULT_PER_PAGE))  # 获取每页显示的数量
     except ValueError:
         per_page = DEFAULT_PER_PAGE
 
@@ -83,16 +83,22 @@ def index(current_path=FILE_DIRECTORY):
     reverse = request.args.get('reverse', 'false').lower() == 'true'
     search_query = request.args.get('search', '').strip()
     filter_kg = request.args.get('filter_kg')  # "1" 表示仅显示在图谱中的，"0" 表示仅显示不在图谱中的
-    # 判断是否处于批量操作模式，通过 URL 参数 bulk=1
     bulk = request.args.get('bulk') == '1'
 
+    # 确保路径是绝对路径
     if not current_path.startswith('/'):
         current_path = '/' + current_path
 
     files_and_folders = get_files_and_folders(current_path)
+    
+    # 修正搜索逻辑：仅在当前目录下搜索
     if search_query:
-        files_and_folders = [f for f in files_and_folders if search_query.lower() in f['name'].lower()]
+        files_and_folders = [
+            f for f in files_and_folders
+            if search_query.lower() in f['name'].lower()  # 搜索文件名
+        ]
 
+    # 排序逻辑
     if sort_by == 'size':
         files_and_folders.sort(key=lambda x: (x['type'] == 'file', x['size'] if x['type'] == 'file' else 0), reverse=reverse)
     elif sort_by == 'mtime':
@@ -112,12 +118,11 @@ def index(current_path=FILE_DIRECTORY):
     # 根据筛选参数过滤文件列表（仅针对 file 类型）
     if filter_kg is not None:
         files_and_folders = [f for f in files_and_folders if f["type"] != "file" or (f["type"] == "file" and ((filter_kg=="1" and f["in_kg"]) or (filter_kg=="0" and not f["in_kg"])))]
-        # 不重置 page
-
+    
     # 计算经过滤后的pdf文件总数（用于统计显示）
     total_pdf_count = sum(1 for f in files_and_folders if f["type"] == "file" and f["name"].lower().endswith('.pdf'))
 
-    # 分页处理（注意：files_and_folders 此时为经过过滤的完整列表）
+    # 分页处理
     total_pages = max(1, (len(files_and_folders) + per_page - 1) // per_page)
     paged_files = files_and_folders[(page - 1) * per_page: page * per_page]
 
@@ -133,6 +138,7 @@ def index(current_path=FILE_DIRECTORY):
                            bulk=bulk,
                            current_path=current_path,
                            total_pdf_count=total_pdf_count)
+
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
