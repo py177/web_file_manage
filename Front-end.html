@@ -1,21 +1,13 @@
-
-cat <<'EOF' > templates/index.html
 <!DOCTYPE html>
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>📁 文件管理系统（STG环境）</title>
+  <title>文件管理系统（STG环境）</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   <style>
       .table th, .table td { text-align: center; vertical-align: middle; white-space: nowrap; }
-      /* 固定各列宽度 */
-      .table th.col-select, .table td.col-select { width: 50px; }
-      .table th.col-name, .table td.col-name { width: 250px; }
-      .table th.col-size, .table td.col-size { width: 100px; }
-      .table th.col-mtime, .table td.col-mtime { width: 150px; }
-      .table th.col-kg, .table td.col-kg { width: 150px; }
-      .table th.col-op, .table td.col-op { width: 200px; }
+      .table th { width: auto; padding: 8px; }
       .file-name { max-width: 250px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
       .action-buttons { display: flex; gap: 5px; justify-content: center; flex-wrap: nowrap; }
       .rename-form { display: flex; gap: 5px; align-items: center; flex-wrap: nowrap; }
@@ -23,6 +15,15 @@ cat <<'EOF' > templates/index.html
       .sort-icons { cursor: pointer; margin-left: 5px; }
       .btn-sm { padding: 4px 8px; font-size: 12px; }
       .kg-filter { margin-left: 5px; font-size: 14px; text-decoration: none; }
+      /* 新增���式，居中标题 */
+      .header-title {
+        text-align: center;
+        font-size: 32px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        margin-top: 30px; /* 确保与页面顶部有适当的间距 */
+        color: #333; /* 设置标题颜色 */
+      }
   </style>
   <script>
     // 定义当前目录及总pdf数量，传自后端
@@ -153,19 +154,28 @@ cat <<'EOF' > templates/index.html
     window.addEventListener("DOMContentLoaded", function() {
       restoreCheckboxes();
     });
-    // 排序功能（与后端构造链接联动，此处不做额外修改）
-    function sortTable(column, isReverse) {
-      // 此函数未做动态处理，排序链接由服务器端构造
-    }
   </script>
 </head>
 <body>
   <div class="container my-4">
+    <!-- 添加标题 -->
+    <div class="header-title">
+      文件管理系统（STG环境）
+    </div>
+
     {# 判断是否处于批量操作模式，通过 bulk 参数 #}
     {% set bulk_mode = bulk %}
-    {# 已删除“显示知识图谱中的文件列表”和“检查上传的PDF”按钮 #}
+    <div class="mb-3">
+      {% if not bulk_mode %}
+        <div class="d-flex gap-2">
+          <a href="{{ url_for('show_kg_files') }}" class="btn btn-primary">显示知识图谱中的文件列表</a>
+          <a href="/check_uploaded_pdfs?current_path={{ current_path }}" class="btn btn-primary">检查上传的PDF</a>
+        </div>
+      {% endif %}
+    </div>
     <form id="filterForm" action="/" method="get" class="d-flex gap-2 mb-3">
       <input type="text" class="form-control" name="search" placeholder="🔍 搜索文件或文件夹" value="{{ search }}">
+      <input type="hidden" name="current_path" value="{{ current_path }}">  <!-- 添加隐藏字段传递当前路径 -->
       <button type="submit" class="btn btn-primary">搜索</button>
       {% if search and search.strip() != '' %}
         <a href="/" class="btn btn-secondary">返回全部</a>
@@ -205,10 +215,8 @@ cat <<'EOF' > templates/index.html
           {% for col in [('name', '名称'), ('size', '大小'), ('mtime', '更新时间')] %}
             <th>
               {{ col[1] }}
-              <span class="sort-icons">
-                <a href="{{ url_for('index', current_path=current_path, search=search, filter_kg=filter_kg, sort_by=col[0], reverse='false', page=1, per_page=per_page) }}">⬆</a>
-                <a href="{{ url_for('index', current_path=current_path, search=search, filter_kg=filter_kg, sort_by=col[0], reverse='true', page=1, per_page=per_page) }}">⬇</a>
-              </span>
+              <span class="sort-icons" onclick="sortTable('{{ col[0] }}', 'false')">⬆</span>
+              <span class="sort-icons" onclick="sortTable('{{ col[0] }}', 'true')">⬇</span>
             </th>
           {% endfor %}
           <th>
@@ -323,4 +331,3 @@ cat <<'EOF' > templates/index.html
   </div>
 </body>
 </html>
-EOF
