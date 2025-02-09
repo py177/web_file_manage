@@ -22,6 +22,7 @@ os.environ["PYTHONIOENCODING"] = "utf-8"
 sys.stdout.reconfigure(encoding='utf-8')
 
 app = Flask(__name__)
+app.secret_key = '123'
 
 # 允许中文文件名的处理函数：仅去除首尾空格和非法字符，保留中间空格
 def secure_filename_cn(filename):
@@ -35,8 +36,8 @@ def datetimeformat(value):
     return datetime.fromtimestamp(value).strftime('%Y-%m-%d %H:%M:%S')
 
 # 文件存放目录及默认分页设置
-#FILE_DIRECTORY = "/Users/qianqian.li3/Desktop/test/data/"
-FILE_DIRECTORY = "/data/"
+FILE_DIRECTORY = "/Users/qianqian.li3/Desktop/test/data/"
+#FILE_DIRECTORY = "/data/"
 DEFAULT_PER_PAGE = 10
 
 # 从知识图谱中查询所有 Document 节点的文件名（不含扩展名），返回一个集合
@@ -69,10 +70,47 @@ def get_files_and_folders(current_path):
     except FileNotFoundError:
         return []
 
+from flask import Flask, render_template, request, redirect, url_for, session
+
+# 账号和密码输入
+USERS = {
+    'nio': '123',
+    'guest': '123',
+    'guest1': '123',
+}
+
+# 登录路由
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        # 验证用户名和密码
+        if username in USERS and USERS[username] == password:
+            session['username'] = username  # 设置登录会话
+            return redirect(url_for('index'))  # 登录成功后重定向到文件管理页面
+        else:
+            error = "用户名或密码错误"
+            return render_template('login.html', error=error)
+
+    return render_template('login.html')
+
+# 检查用户是否登录
+def is_logged_in():
+    return 'username' in session
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)  # 清除会话
+    return redirect(url_for('login'))  # 重定向到登录页面
+
 @app.route('/')
 @app.route('/<path:current_path>')
 def index(current_path=FILE_DIRECTORY):
-    # 调试打印路径和文件
+    if not is_logged_in():  # 如果未登录，重定向到登录页面
+        return redirect(url_for('login'))
+
     print(f"Current Path1: {current_path}")
     files_and_folders = get_files_and_folders(current_path)
     #print(f"Files and Folders: {files_and_folders}")
@@ -358,5 +396,4 @@ def bulk_action():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000, host='0.0.0.0')
-
 EOF
