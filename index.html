@@ -1,3 +1,4 @@
+cat <<'EOF' > templates/index.html
 <!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -158,11 +159,17 @@
   </script>
 </head>
 <body>
+    <!-- 在页面顶部加一个登出按钮 -->
+    {% if session['username'] %}
+        <div class="container text-end">
+            <a href="{{ url_for('logout') }}" class="btn btn-danger">登出</a>
+        </div>
+    {% endif %}
     <!-- 在这里插入标题 -->
     <div class="text-center my-4">
       <h1>📁 文件管理系统（STG环境）</h1>
     </div>
-    
+
     <div class="container my-4">
       {# 判断是否处于批量操作模式，通过 bulk 参数 #}
       {% set bulk_mode = bulk %}
@@ -179,6 +186,7 @@
         {% if bulk_mode %}
           <input type="hidden" name="bulk" value="1">
         {% endif %}
+
       </form>      
     {% if current_path != '/data/' %}
       <a href="{{ url_for('index', current_path=current_path.rsplit('/', 1)[0] or '/data/', search=search, filter_kg=filter_kg, bulk=( '1' if bulk_mode else None)) }}" class="btn btn-secondary mb-3">返回上级</a>
@@ -326,3 +334,4 @@
   </div>
 </body>
 </html>
+EOF
