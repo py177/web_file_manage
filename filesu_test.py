@@ -1,4 +1,3 @@
-cat <<'EOF' > filesu_test.py
 import os
 import sys
 import urllib.parse
@@ -396,4 +395,3 @@ def bulk_action():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000, host='0.0.0.0')
-EOF
