@@ -35,6 +35,7 @@ def datetimeformat(value):
     return datetime.fromtimestamp(value).strftime('%Y-%m-%d %H:%M:%S')
 
 # 文件存放目录及默认分页设置
+#FILE_DIRECTORY = "/Users/qianqian.li3/Desktop/test/data/"
 FILE_DIRECTORY = "/data/"
 DEFAULT_PER_PAGE = 10
 
@@ -54,6 +55,8 @@ def get_kg_file_names():
 
 # 获取当前路径下的所有文件和文件夹
 def get_files_and_folders(current_path):
+    current_path = request.form.get('current_path', current_path)
+    print(f"Current Path3: {current_path}")
     try:
         with os.scandir(current_path) as entries:
             return [
@@ -69,6 +72,11 @@ def get_files_and_folders(current_path):
 @app.route('/')
 @app.route('/<path:current_path>')
 def index(current_path=FILE_DIRECTORY):
+    # 调试打印路径和文件
+    print(f"Current Path1: {current_path}")
+    files_and_folders = get_files_and_folders(current_path)
+    #print(f"Files and Folders: {files_and_folders}")
+    
     # 获取请求参数
     try:
         page = int(request.args.get('page', 1))  # 获取当前页码
@@ -85,11 +93,16 @@ def index(current_path=FILE_DIRECTORY):
     filter_kg = request.args.get('filter_kg')  # "1" 表示仅显示在图谱中的，"0" 表示仅显示不在图谱中的
     bulk = request.args.get('bulk') == '1'
 
+    # 获取当前路径，优先使用查询参数中的 `current_path`
+    # current_path = request.form.get('current_path', current_path)
+
     # 确保路径是绝对路径
     if not current_path.startswith('/'):
         current_path = '/' + current_path
 
     files_and_folders = get_files_and_folders(current_path)
+    #print(files_and_folders)
+    print(f"Current Path2: {current_path}")
     
     # 修正搜索逻辑：仅在当前目录下搜索
     if search_query:
@@ -97,6 +110,7 @@ def index(current_path=FILE_DIRECTORY):
             f for f in files_and_folders
             if search_query.lower() in f['name'].lower()  # 搜索文件名
         ]
+        print(f"Current Path4: {current_path}")
 
     # 排序逻辑
     if sort_by == 'size':
@@ -245,13 +259,17 @@ def update_kg():
 @app.route('/create_folder', methods=['POST'])
 def create_folder():
     folder_name = secure_filename_cn(request.form.get('folder_name'))
+    current_path = request.form.get('current_path', FILE_DIRECTORY)
+
     if not folder_name:
         return "文件夹名称不能为空", 400
-    folder_path = os.path.join(FILE_DIRECTORY, folder_name)
+    folder_path = os.path.join(current_path, folder_name)
     if os.path.exists(folder_path):
         return "文件夹已存在", 400
     os.makedirs(folder_path)
-    return redirect(url_for('index'))
+    
+    # 重定向到当前路径
+    return redirect(url_for('index', current_path=current_path))
 
 @app.route('/files/<path:filename>')
 def serve_file(filename):
@@ -340,4 +358,5 @@ def bulk_action():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000, host='0.0.0.0')
+
 EOF
