@@ -167,11 +167,11 @@
       {# 判断是否处于批量操作模式，通过 bulk 参数 #}
       {% set bulk_mode = bulk %}
       {# 已删除“显示知识图谱中的文件列表”和“检查上传的PDF”按钮 #}
-      <form id="filterForm" action="/" method="get" class="d-flex gap-2 mb-3">
+      <form id="filterForm" action="{{ url_for('index', current_path=current_path) }}" method="get" class="d-flex gap-2 mb-3">
         <input type="text" class="form-control" name="search" placeholder="🔍 搜索文件或文件夹" value="{{ search }}">
         <button type="submit" class="btn btn-primary">搜索</button>
         {% if search and search.strip() != '' %}
-          <a href="/" class="btn btn-secondary">返回全部</a>
+          <a href="{{ url_for('index', current_path=current_path) }}" class="btn btn-secondary">返回全部</a>
         {% endif %}
         {% if filter_kg is not none %}
           <input type="hidden" name="filter_kg" value="{{ filter_kg }}">
@@ -179,7 +179,7 @@
         {% if bulk_mode %}
           <input type="hidden" name="bulk" value="1">
         {% endif %}
-      </form>  
+      </form>      
     {% if current_path != '/data/' %}
       <a href="{{ url_for('index', current_path=current_path.rsplit('/', 1)[0] or '/data/', search=search, filter_kg=filter_kg, bulk=( '1' if bulk_mode else None)) }}" class="btn btn-secondary mb-3">返回上级</a>
     {% endif %}
