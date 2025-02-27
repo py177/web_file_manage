@@ -1,10 +1,11 @@
+import json
 import os
 import sys
 import urllib.parse
 import re
 import logging
 from datetime import datetime
-from flask import Flask, request, render_template, redirect, url_for, send_from_directory, abort
+from flask import Flask, jsonify, request, render_template, redirect, url_for, send_from_directory, abort
 from werkzeug.utils import secure_filename, safe_join
 
 # 引入 neo4j 和 pandas
@@ -35,8 +36,8 @@ def datetimeformat(value):
     return datetime.fromtimestamp(value).strftime('%Y-%m-%d %H:%M:%S')
 
 # 文件存放目录及默认分页设置
-FILE_DIRECTORY = "/Users/qianqian.li3/Desktop/test/data/"
-#FILE_DIRECTORY = "/data/"
+#FILE_DIRECTORY = "/Users/qianqian.li3/Desktop/test/data/"
+FILE_DIRECTORY = "/data/"
 DEFAULT_PER_PAGE = 10
 
 # 从知识图谱中查询所有 Document 节点的文件名（不含扩展名），返回一个集合
@@ -116,7 +117,7 @@ def index(current_path=FILE_DIRECTORY):
     
     # 获取请求参数
     try:
-        page = int(request.args.get('page', 1))  # 获取当前页码
+        page = int(request.args.get('page', 1))  # 获取���前页码
     except ValueError:
         page = 1
     try:
@@ -141,7 +142,7 @@ def index(current_path=FILE_DIRECTORY):
     #print(files_and_folders)
     print(f"Current Path2: {current_path}")
     
-    # 修正搜索逻辑：仅在当前目录下搜索
+    # 修正搜索逻辑：仅��当前目录下搜索
     if search_query:
         files_and_folders = [
             f for f in files_and_folders
@@ -274,22 +275,66 @@ def show_kg_files():
     logging.info("Knowledge Graph files: %s", kg_files)
     return render_template("index.html", kg_files=kg_files)
 
+import requests
+
+import requests
+
+def send_pdf_path(pdf_path):
+    url = "http://10.130.48.113:6000/process_pdf"  
+    headers = {'Content-Type': 'application/json'}  
+
+    data = json.dumps({"filePath": pdf_path})  
+
+    try:
+        response = requests.post(url, data=data, headers=headers)  # 发送 POST 请求
+        if response.status_code == 200:
+            print("请求成功，返回数据:", response.text)
+        else:
+            print(f"请求失败，状态码: {response.status_code}, 响应内容: {response.text}")
+    except Exception as e:
+        print("请求发送错误:", e)
+
+from neo4j import GraphDatabase
+
+from neo4j import GraphDatabase
+
 @app.route('/update_kg', methods=['POST'])
 def update_kg():
     action = request.form.get("action")  # "add" 或 "remove"
     file_name = request.form.get("file_name")  # 文件基本名（不含扩展名）
-    current_path = request.form.get("current_path", FILE_DIRECTORY)
-    db = 'graphrag'
     neo4j_url = 'bolt://10.132.252.15:7687'
-    driver = GraphDatabase.driver(neo4j_url, auth=(("API_SERVER", "Pass1234")))
-    session = driver.session(database=db)
+    driver = GraphDatabase.driver(neo4j_url, auth=("API_SERVER", "Pass1234"))
+    current_path = request.form.get("current_path", FILE_DIRECTORY)  # 当前路径
+    
+    # 获取文件扩展名
+    file_extension = os.path.splitext(file_name)[1]
+
+    # 如果文件名没有扩展名或者扩展名不是 .pdf，强制加上 .pdf
+    if not file_extension or file_extension.lower() != '.pdf':
+        file_name += ".pdf"  # 默认给文件加上 .pdf 扩展名
+
+    # 直接拼接文件路径，确保包含扩展名
+    file_path = os.path.join(current_path, file_name)  # 获取文件的完整路径（包括后缀）
+
+    # 打印调试信息
+    print(f"Attempting to send request to http://10.130.48.113 with file path: {file_path}")
+
+    # 访问 '10.130.48.113' 并将文件路径传递给它
     if action == "add":
-         query = "MERGE (d:Document {fileName: $file_name}) RETURN d"
-         session.run(query, file_name=file_name)
+        try:
+            # 调用 send_pdf_path 函数来传递文件路径
+            send_pdf_path(file_path)
+
+            return jsonify({"message": "操作已完成"})  # 不返回成功信息，只返回简单的消息
+        except requests.exceptions.RequestException as e:
+            # 捕获请求异常并返回错误信息
+            return jsonify({"error": f"请求失败: {str(e)}"}), 500
     elif action == "remove":
-         query = "MATCH (d:Document {fileName: $file_name}) DETACH DELETE d"
-         session.run(query, file_name=file_name)
-    session.close()
+        # 获取 Neo4j 会话
+        with driver.session() as session:
+            query = "MATCH (d:Document {fileName: $file_name}) DETACH DELETE d"
+            session.run(query, file_name=file_name)
+
     driver.close()
     return redirect(url_for('index', current_path=current_path))
 
